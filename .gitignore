@@ -1,0 +1,44 @@
+# Binaries for programs and plugins
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories (if vendor directory is used)
+vendor/
+
+# Go workspace file
+*.work
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Docker files
+.docker/
+docker-compose.override.yml
+docker-compose.local.yml
+
+Desktop.ini
+$RECYCLE.BIN/
+
+# Environment files
+.env
+
+# Docker logs
+*.container.log
