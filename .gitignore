@@ -42,3 +42,5 @@ $RECYCLE.BIN/
 
 # Docker logs
 *.container.log
+
+data/

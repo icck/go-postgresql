@@ -1,13 +1,13 @@
-version: '3.8'
 services:
   postgres:
     image: postgres:latest
     restart: always
     environment:
-      POSTGRES_USER: example_user
-      POSTGRES_PASSWORD: example_password
-      POSTGRES_DB: example_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: go_database
     ports:
       - "5432:5432"
     volumes:
-      - ./data:/var/lib/postgresql/data
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d
