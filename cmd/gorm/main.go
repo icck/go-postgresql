@@ -19,11 +19,11 @@ type User struct {
 
 // Configuration for data volume
 const (
-	INITIAL_USERS_COUNT = 10000 // 初期データ数
-	BATCH_SIZE          = 1000  // バッチサイズ
-	UPDATE_COUNT        = 1000  // 更新対象数
-	DELETE_COUNT        = 500   // 削除対象数
-	NEW_USERS_COUNT     = 2000  // 新規作成数
+	INITIAL_USERS_COUNT = 50000 // 初期データ数
+	BATCH_SIZE          = 5000  // バッチサイズ
+	UPDATE_COUNT        = 5000  // 更新対象数
+	DELETE_COUNT        = 2500  // 削除対象数
+	NEW_USERS_COUNT     = 10000 // 新規作成数
 )
 
 func main() {

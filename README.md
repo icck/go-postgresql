@@ -54,11 +54,11 @@ go run main.go
 Both versions perform identical operations with large datasets:
 
 - **Reset**: Truncate table and restart ID sequence
-- **Seed**: Insert 10,000 initial users in batches of 1,000
+- **Seed**: Insert 50,000 initial users in batches of 5,000
 - **Read**: Count total users
-- **Update**: Update 1,000 users with new names
-- **Delete**: Delete 500 users
-- **Create**: Insert 2,000 new users in batches
+- **Update**: Update 5,000 users with new names
+- **Delete**: Delete 2,500 users
+- **Create**: Insert 10,000 new users in batches
 - **Final Read**: Count final users
 
 ### Performance Metrics
@@ -81,11 +81,11 @@ Data volumes can be adjusted by modifying the constants in each main.go:
 
 ```go
 const (
-    INITIAL_USERS_COUNT = 10000  // 初期データ数
-    BATCH_SIZE         = 1000    // バッチサイズ
-    UPDATE_COUNT       = 1000    // 更新対象数
-    DELETE_COUNT       = 500     // 削除対象数
-    NEW_USERS_COUNT    = 2000    // 新規作成数
+    INITIAL_USERS_COUNT = 50000  // 初期データ数
+    BATCH_SIZE         = 5000    // バッチサイズ
+    UPDATE_COUNT       = 5000    // 更新対象数
+    DELETE_COUNT       = 2500    // 削除対象数
+    NEW_USERS_COUNT    = 10000   // 新規作成数
 )
 ```
 
