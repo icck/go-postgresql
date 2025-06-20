@@ -2,7 +2,7 @@
 
 echo "=========================================="
 echo "PostgreSQL Performance Benchmark"
-echo "GORM vs PGX Comparison"
+echo "GORM vs PGX vs PQ Comparison"
 echo "=========================================="
 echo ""
 
@@ -48,11 +48,20 @@ cd ../pgx
 go run main.go
 echo ""
 
+# Run PQ version
+echo "=========================================="
+echo "Running PQ Version..."
+echo "=========================================="
+echo ""
+cd ../pq
+go run main.go
+echo ""
+
 echo "=========================================="
 echo "Benchmark Complete!"
 echo "=========================================="
 echo ""
-echo "Compare the performance summaries above to see the differences between GORM and PGX."
+echo "Compare the performance summaries above to see the differences between GORM, PGX and PQ."
 echo "Key metrics to compare:"
 echo "- Seed time (bulk insert performance)"
 echo "- Update time (bulk update performance)"
