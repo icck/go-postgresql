@@ -1,23 +1,23 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-// User represents a user in the database
+// User corresponds to the users table in the database.
 type User struct {
-	ID        int
+	ID        uint `gorm:"primaryKey"`
 	Name      string
-	Email     string
+	Email     string `gorm:"unique"`
 	CreatedAt time.Time
 }
 
-// Configuration for data volume (same as GORM version)
+// Configuration for data volume
 const (
 	INITIAL_USERS_COUNT = 10000 // 初期データ数
 	BATCH_SIZE          = 1000  // バッチサイズ
@@ -27,28 +27,25 @@ const (
 )
 
 func main() {
-	log.Println("go-postgresql (PGX version) starting up - Performance Test Mode")
+	log.Println("go-postgresql (GORM version) starting up - Performance Test Mode")
 
 	totalStart := time.Now()
 
-	// Database connection string
-	connString := "host=127.0.0.1 user=user password=password dbname=go_database port=5432 sslmode=disable"
+	// DSN for connecting to the PostgreSQL database.
+	dsn := "host=127.0.0.1 user=user password=password dbname=go_database port=5432 sslmode=disable TimeZone=Asia/Tokyo"
 
-	// Connect to the database
-	ctx := context.Background()
-	conn, err := pgx.Connect(ctx, connString)
+	// Open a connection to the database.
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer conn.Close(ctx)
 
 	log.Println("Database connection successful.")
 
 	// --- Reset database for idempotent run ---
 	fmt.Println("\n=== Resetting database for a clean run ===")
 	resetStart := time.Now()
-	_, err = conn.Exec(ctx, "TRUNCATE TABLE users RESTART IDENTITY")
-	if err != nil {
+	if err := db.Exec("TRUNCATE TABLE users RESTART IDENTITY").Error; err != nil {
 		log.Fatalf("Failed to truncate users table: %v", err)
 	}
 	resetDuration := time.Since(resetStart)
@@ -66,23 +63,18 @@ func main() {
 			end = INITIAL_USERS_COUNT
 		}
 
-		// Prepare batch insert
-		batch := &pgx.Batch{}
+		var batchUsers []User
 		for j := i; j < end; j++ {
-			name := fmt.Sprintf("User_%06d", j+1)
-			email := fmt.Sprintf("user%06d@example.com", j+1)
-			batch.Queue("INSERT INTO users (name, email, created_at) VALUES ($1, $2, $3)", name, email, time.Now())
+			user := User{
+				Name:  fmt.Sprintf("User_%06d", j+1),
+				Email: fmt.Sprintf("user%06d@example.com", j+1),
+			}
+			batchUsers = append(batchUsers, user)
 		}
 
-		// Execute batch
-		batchResults := conn.SendBatch(ctx, batch)
-		for k := 0; k < end-i; k++ {
-			_, err := batchResults.Exec()
-			if err != nil {
-				log.Fatalf("Failed to execute batch insert %d: %v", k, err)
-			}
+		if err := db.Create(&batchUsers).Error; err != nil {
+			log.Fatalf("Failed to seed batch users %d-%d: %v", i+1, end, err)
 		}
-		batchResults.Close()
 
 		batchDuration := time.Since(batchStart)
 		fmt.Printf("Batch %d-%d inserted in %v\n", i+1, end, batchDuration)
@@ -94,11 +86,8 @@ func main() {
 	// --- Read: Get user count ---
 	fmt.Println("\n=== Reading user count after seeding ===")
 	readStart := time.Now()
-	var userCount int
-	err = conn.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&userCount)
-	if err != nil {
-		log.Fatalf("Failed to count users: %v", err)
-	}
+	var userCount int64
+	db.Model(&User{}).Count(&userCount)
 	readDuration := time.Since(readStart)
 	fmt.Printf("Found %d users in %v\n", userCount, readDuration)
 
@@ -106,30 +95,14 @@ func main() {
 	fmt.Printf("\n=== Updating %d users ===\n", UPDATE_COUNT)
 	updateStart := time.Now()
 
-	// Get users to update
-	rows, err := conn.Query(ctx, "SELECT id FROM users LIMIT $1", UPDATE_COUNT)
-	if err != nil {
-		log.Fatalf("Failed to get users for update: %v", err)
-	}
+	// Get random users to update
+	var usersToUpdate []User
+	db.Limit(UPDATE_COUNT).Find(&usersToUpdate)
 
-	var userIDs []int
-	for rows.Next() {
-		var id int
-		err := rows.Scan(&id)
-		if err != nil {
-			log.Printf("Failed to scan user ID: %v", err)
-			continue
-		}
-		userIDs = append(userIDs, id)
-	}
-	rows.Close()
-
-	// Update users
-	for i, userID := range userIDs {
-		newName := fmt.Sprintf("Updated_User_%06d", userID)
-		_, err := conn.Exec(ctx, "UPDATE users SET name = $1 WHERE id = $2", newName, userID)
-		if err != nil {
-			log.Printf("Failed to update user ID %d: %v", userID, err)
+	for i, user := range usersToUpdate {
+		newName := fmt.Sprintf("Updated_User_%06d", user.ID)
+		if err := db.Model(&user).Update("Name", newName).Error; err != nil {
+			log.Printf("Failed to update user ID %d: %v", user.ID, err)
 		}
 
 		if (i+1)%100 == 0 {
@@ -138,35 +111,19 @@ func main() {
 	}
 
 	updateDuration := time.Since(updateStart)
-	fmt.Printf("Updated %d users in %v\n", len(userIDs), updateDuration)
+	fmt.Printf("Updated %d users in %v\n", len(usersToUpdate), updateDuration)
 
 	// --- Delete: Remove multiple users ---
 	fmt.Printf("\n=== Deleting %d users ===\n", DELETE_COUNT)
 	deleteStart := time.Now()
 
-	// Get users to delete
-	rows, err = conn.Query(ctx, "SELECT id FROM users OFFSET 1000 LIMIT $1", DELETE_COUNT)
-	if err != nil {
-		log.Fatalf("Failed to get users for deletion: %v", err)
-	}
+	// Get random users to delete
+	var usersToDelete []User
+	db.Offset(1000).Limit(DELETE_COUNT).Find(&usersToDelete)
 
-	var deleteIDs []int
-	for rows.Next() {
-		var id int
-		err := rows.Scan(&id)
-		if err != nil {
-			log.Printf("Failed to scan user ID for deletion: %v", err)
-			continue
-		}
-		deleteIDs = append(deleteIDs, id)
-	}
-	rows.Close()
-
-	// Delete users
-	for i, userID := range deleteIDs {
-		_, err := conn.Exec(ctx, "DELETE FROM users WHERE id = $1", userID)
-		if err != nil {
-			log.Printf("Failed to delete user ID %d: %v", userID, err)
+	for i, user := range usersToDelete {
+		if err := db.Delete(&user).Error; err != nil {
+			log.Printf("Failed to delete user ID %d: %v", user.ID, err)
 		}
 
 		if (i+1)%100 == 0 {
@@ -175,7 +132,7 @@ func main() {
 	}
 
 	deleteDuration := time.Since(deleteStart)
-	fmt.Printf("Deleted %d users in %v\n", len(deleteIDs), deleteDuration)
+	fmt.Printf("Deleted %d users in %v\n", len(usersToDelete), deleteDuration)
 
 	// --- Create: Add new users ---
 	fmt.Printf("\n=== Creating %d new users ===\n", NEW_USERS_COUNT)
@@ -189,23 +146,18 @@ func main() {
 			end = NEW_USERS_COUNT
 		}
 
-		// Prepare batch insert for new users
-		batch := &pgx.Batch{}
+		var newUsers []User
 		for j := i; j < end; j++ {
-			name := fmt.Sprintf("New_User_%06d", j+1)
-			email := fmt.Sprintf("newuser%06d@example.com", j+1)
-			batch.Queue("INSERT INTO users (name, email, created_at) VALUES ($1, $2, $3)", name, email, time.Now())
+			user := User{
+				Name:  fmt.Sprintf("New_User_%06d", j+1),
+				Email: fmt.Sprintf("newuser%06d@example.com", j+1),
+			}
+			newUsers = append(newUsers, user)
 		}
 
-		// Execute batch
-		batchResults := conn.SendBatch(ctx, batch)
-		for k := 0; k < end-i; k++ {
-			_, err := batchResults.Exec()
-			if err != nil {
-				log.Printf("Failed to execute new user batch insert %d: %v", k, err)
-			}
+		if err := db.Create(&newUsers).Error; err != nil {
+			log.Printf("Failed to create batch new users %d-%d: %v", i+1, end, err)
 		}
-		batchResults.Close()
 
 		batchDuration := time.Since(batchStart)
 		fmt.Printf("New batch %d-%d created in %v\n", i+1, end, batchDuration)
@@ -217,17 +169,14 @@ func main() {
 	// --- Final Read: Get final user count ---
 	fmt.Println("\n=== Final user count ===")
 	finalReadStart := time.Now()
-	err = conn.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&userCount)
-	if err != nil {
-		log.Fatalf("Failed to count final users: %v", err)
-	}
+	db.Model(&User{}).Count(&userCount)
 	finalReadDuration := time.Since(finalReadStart)
 	fmt.Printf("Final user count: %d (retrieved in %v)\n", userCount, finalReadDuration)
 
 	// --- Performance Summary ---
 	totalDuration := time.Since(totalStart)
 	fmt.Println("\n==================================================")
-	fmt.Println("PGX PERFORMANCE SUMMARY")
+	fmt.Println("GORM PERFORMANCE SUMMARY")
 	fmt.Println("==================================================")
 	fmt.Printf("Reset:          %v\n", resetDuration)
 	fmt.Printf("Seed (%d):      %v\n", INITIAL_USERS_COUNT, seedDuration)
