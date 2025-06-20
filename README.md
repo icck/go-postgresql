@@ -1,83 +1,83 @@
-# Go PostgreSQL Example
+# Go PostgreSQL サンプル
 
-This repository provides a `docker-compose.yml` to run PostgreSQL and includes performance comparison between GORM and PGX.
+このリポジトリは、PostgreSQLを実行するための`docker-compose.yml`を提供し、GORMとPGXのパフォーマンス比較を含んでいます。
 
-## Quick Start
+## クイックスタート
 
-Start the database container in detached mode:
+データベースコンテナをデタッチモードで起動します：
 
 ```bash
 docker-compose up -d
 ```
 
-The database listens on `localhost:5432` and stores data in `./data`.
+データベースは`localhost:5432`でリッスンし、データは`./data`に保存されます。
 
-## Performance Benchmark
+## パフォーマンスベンチマーク
 
-This project includes two implementations for performance comparison:
+このプロジェクトには、パフォーマンス比較のための2つの実装が含まれています：
 
-- **GORM Version** (`cmd/gorm/main.go`): Uses GORM ORM
-- **PGX Version** (`cmd/pgx/main.go`): Uses native PGX driver
+- **GORMバージョン** (`cmd/gorm/main.go`): GORM ORMを使用
+- **PGXバージョン** (`cmd/pgx/main.go`): ネイティブPGXドライバーを使用
 
-### Running the Benchmark
+### ベンチマークの実行
 
-Execute the automated benchmark script:
+自動ベンチマークスクリプトを実行します：
 
 ```bash
 ./benchmark.sh
 ```
 
-This script will:
-1. Start PostgreSQL container
-2. Run the GORM version with performance timing
-3. Run the PGX version with performance timing
-4. Display detailed performance summaries for comparison
+このスクリプトは以下を実行します：
+1. PostgreSQLコンテナを起動
+2. GORMバージョンをパフォーマンス計測付きで実行
+3. PGXバージョンをパフォーマンス計測付きで実行
+4. 比較のための詳細なパフォーマンス要約を表示
 
-### Manual Execution
+### 手動実行
 
-You can also run each version individually:
+各バージョンを個別に実行することもできます：
 
-**GORM Version:**
+**GORMバージョン:**
 ```bash
 cd cmd/gorm
 go run main.go
 ```
 
-**PGX Version:**
+**PGXバージョン:**
 ```bash
 cd cmd/pgx
 go run main.go
 ```
 
-### Benchmark Operations
+### ベンチマーク操作
 
-Both versions perform identical operations with large datasets:
+両バージョンとも大規模データセットで同一の操作を実行します：
 
-- **Reset**: Truncate table and restart ID sequence
-- **Seed**: Insert 50,000 initial users in batches of 5,000
-- **Read**: Count total users
-- **Update**: Update 5,000 users with new names
-- **Delete**: Delete 2,500 users
-- **Create**: Insert 10,000 new users in batches
-- **Final Read**: Count final users
+- **Reset**: テーブルを切り詰め、IDシーケンスを再開
+- **Seed**: 初期ユーザー50,000件を5,000件のバッチで挿入
+- **Read**: 総ユーザー数をカウント
+- **Update**: 5,000ユーザーの名前を新しい名前で更新
+- **Delete**: 2,500ユーザーを削除
+- **Create**: 新しいユーザー10,000件をバッチで挿入
+- **Final Read**: 最終ユーザー数をカウント
 
-### Performance Metrics
+### パフォーマンス指標
 
-The benchmark measures:
-- Individual operation timing
-- Batch processing efficiency
-- Total execution time
-- Memory usage patterns
+ベンチマークでは以下を測定します：
+- 個別操作のタイミング
+- バッチ処理の効率性
+- 総実行時間
+- メモリ使用パターン
 
-### Expected Results
+### 期待される結果
 
-Generally, you can expect:
-- **PGX**: Lower latency, higher throughput, less memory usage
-- **GORM**: Higher-level abstractions, more memory usage, additional overhead
+一般的に、以下のような結果が期待できます：
+- **PGX**: 低レイテンシ、高スループット、少ないメモリ使用量
+- **GORM**: 高レベルな抽象化、多いメモリ使用量、追加のオーバーヘッド
 
-### Configuration
+### 設定
 
-Data volumes can be adjusted by modifying the constants in each main.go:
+データ量は各main.goの定数を変更することで調整できます：
 
 ```go
 const (
@@ -88,5 +88,3 @@ const (
     NEW_USERS_COUNT    = 10000   // 新規作成数
 )
 ```
-
-Available presets: `small`, `medium`, `large`, `xlarge`
