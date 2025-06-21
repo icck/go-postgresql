@@ -8,6 +8,8 @@ import (
 
 	"go-postgresql/config"
 
+	"strings"
+
 	_ "github.com/lib/pq"
 )
 
@@ -18,6 +20,16 @@ type User struct {
 	Name      string
 	Email     string
 	CreatedAt time.Time
+}
+
+// buildPlaceholders generates a string of placeholders for SQL IN clauses.
+// Example: buildPlaceholders(3, 1) -> "$1, $2, $3"
+func buildPlaceholders(count, start int) string {
+	placeholders := make([]string, count)
+	for i := 0; i < count; i++ {
+		placeholders[i] = fmt.Sprintf("$%d", start+i)
+	}
+	return strings.Join(placeholders, ",")
 }
 
 func main() {
@@ -54,6 +66,7 @@ func main() {
 	// --- Seed large amount of initial data ---
 	fmt.Printf("\n=== Seeding %d initial users ===\n", cfg.InitialUsersCount)
 	seedStart := time.Now()
+	// Use multi-row INSERT for bulk seeding
 	for i := 0; i < cfg.InitialUsersCount; i += cfg.BatchSize {
 		batchStart := time.Now()
 		end := i + cfg.BatchSize
@@ -61,26 +74,18 @@ func main() {
 			end = cfg.InitialUsersCount
 		}
 
-		tx, err := db.Begin()
-		if err != nil {
-			log.Fatalf("Failed to begin transaction: %v", err)
-		}
-
-		stmt, err := tx.Prepare("INSERT INTO users (name, email, created_at) VALUES ($1, $2, $3)")
-		if err != nil {
-			log.Fatalf("Failed to prepare statement: %v", err)
-		}
-
+		valueStrings := make([]string, 0, end-i)
+		args := make([]interface{}, 0, (end-i)*3)
+		argIndex := 1
 		for j := i; j < end; j++ {
-			name := fmt.Sprintf("User_%06d", j+1)
-			email := fmt.Sprintf("user%06d@example.com", j+1)
-			if _, err := stmt.Exec(name, email, time.Now()); err != nil {
-				log.Fatalf("Failed to insert user %d: %v", j+1, err)
-			}
+			valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d)", argIndex, argIndex+1, argIndex+2))
+			argIndex += 3
+			args = append(args, fmt.Sprintf("User_%06d", j+1), fmt.Sprintf("user%06d@example.com", j+1), time.Now())
 		}
-		stmt.Close()
-		if err := tx.Commit(); err != nil {
-			log.Fatalf("Failed to commit batch: %v", err)
+
+		query := fmt.Sprintf("INSERT INTO users (name, email, created_at) VALUES %s", strings.Join(valueStrings, ","))
+		if _, err := db.Exec(query, args...); err != nil {
+			log.Fatalf("Failed to bulk insert seed data: %v", err)
 		}
 
 		batchDuration := time.Since(batchStart)
@@ -117,13 +122,18 @@ func main() {
 	}
 	rows.Close()
 
-	for i, id := range ids {
-		newName := fmt.Sprintf("Updated_User_%06d", id)
-		if _, err := db.Exec("UPDATE users SET name = $1 WHERE id = $2", newName, id); err != nil {
-			log.Printf("Failed to update user ID %d: %v", id, err)
+	if len(ids) > 0 {
+		newName := "Updated_User_Bulk_PQ"
+		query := fmt.Sprintf("UPDATE users SET name = $1 WHERE id IN (%s)", buildPlaceholders(len(ids), 2))
+
+		args := make([]interface{}, len(ids)+1)
+		args[0] = newName
+		for i, id := range ids {
+			args[i+1] = id
 		}
-		if (i+1)%100 == 0 {
-			fmt.Printf("Updated %d users...\n", i+1)
+
+		if _, err := db.Exec(query, args...); err != nil {
+			log.Fatalf("Failed to bulk update users: %v", err)
 		}
 	}
 	updateDuration := time.Since(updateStart)
@@ -147,12 +157,16 @@ func main() {
 	}
 	rows.Close()
 
-	for i, id := range deleteIDs {
-		if _, err := db.Exec("DELETE FROM users WHERE id = $1", id); err != nil {
-			log.Printf("Failed to delete user ID %d: %v", id, err)
+	if len(deleteIDs) > 0 {
+		query := fmt.Sprintf("DELETE FROM users WHERE id IN (%s)", buildPlaceholders(len(deleteIDs), 1))
+
+		args := make([]interface{}, len(deleteIDs))
+		for i, id := range deleteIDs {
+			args[i] = id
 		}
-		if (i+1)%100 == 0 {
-			fmt.Printf("Deleted %d users...\n", i+1)
+
+		if _, err := db.Exec(query, args...); err != nil {
+			log.Fatalf("Failed to bulk delete users: %v", err)
 		}
 	}
 	deleteDuration := time.Since(deleteStart)
@@ -161,6 +175,7 @@ func main() {
 	// --- Create: Add new users ---
 	fmt.Printf("\n=== Creating %d new users ===\n", cfg.NewUsersCount)
 	createStart := time.Now()
+	// Use multi-row INSERT for bulk creation
 	for i := 0; i < cfg.NewUsersCount; i += cfg.BatchSize {
 		batchStart := time.Now()
 		end := i + cfg.BatchSize
@@ -168,26 +183,18 @@ func main() {
 			end = cfg.NewUsersCount
 		}
 
-		tx, err := db.Begin()
-		if err != nil {
-			log.Fatalf("Failed to begin transaction: %v", err)
-		}
-
-		stmt, err := tx.Prepare("INSERT INTO users (name, email, created_at) VALUES ($1, $2, $3)")
-		if err != nil {
-			log.Fatalf("Failed to prepare statement: %v", err)
-		}
-
+		valueStrings := make([]string, 0, end-i)
+		args := make([]interface{}, 0, (end-i)*3)
+		argIndex := 1
 		for j := i; j < end; j++ {
-			name := fmt.Sprintf("New_User_%06d", j+1)
-			email := fmt.Sprintf("newuser%06d@example.com", j+1)
-			if _, err := stmt.Exec(name, email, time.Now()); err != nil {
-				log.Printf("Failed to insert new user %d: %v", j+1, err)
-			}
+			valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d)", argIndex, argIndex+1, argIndex+2))
+			argIndex += 3
+			args = append(args, fmt.Sprintf("New_User_%06d", j+1), fmt.Sprintf("newuser%06d@example.com", j+1), time.Now())
 		}
-		stmt.Close()
-		if err := tx.Commit(); err != nil {
-			log.Fatalf("Failed to commit batch: %v", err)
+
+		query := fmt.Sprintf("INSERT INTO users (name, email, created_at) VALUES %s", strings.Join(valueStrings, ","))
+		if _, err := db.Exec(query, args...); err != nil {
+			log.Fatalf("Failed to bulk insert new data: %v", err)
 		}
 
 		batchDuration := time.Since(batchStart)

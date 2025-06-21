@@ -120,18 +120,21 @@ func main() {
 	}
 	rows.Close()
 
-	// Update users
-	for i, userID := range userIDs {
+	// Batch update users
+	batch := &pgx.Batch{}
+	for _, userID := range userIDs {
 		newName := fmt.Sprintf("Updated_User_%06d", userID)
-		_, err := conn.Exec(ctx, "UPDATE users SET name = $1 WHERE id = $2", newName, userID)
-		if err != nil {
-			log.Printf("Failed to update user ID %d: %v", userID, err)
-		}
+		batch.Queue("UPDATE users SET name = $1 WHERE id = $2", newName, userID)
+	}
 
-		if (i+1)%100 == 0 {
-			fmt.Printf("Updated %d users...\n", i+1)
+	batchResults := conn.SendBatch(ctx, batch)
+	for i := 0; i < len(userIDs); i++ {
+		_, err := batchResults.Exec()
+		if err != nil {
+			log.Printf("Failed to execute batch update: %v", err)
 		}
 	}
+	batchResults.Close()
 
 	updateDuration := time.Since(updateStart)
 	fmt.Printf("Updated %d users in %v\n", len(userIDs), updateDuration)
@@ -158,17 +161,20 @@ func main() {
 	}
 	rows.Close()
 
-	// Delete users
-	for i, userID := range deleteIDs {
-		_, err := conn.Exec(ctx, "DELETE FROM users WHERE id = $1", userID)
-		if err != nil {
-			log.Printf("Failed to delete user ID %d: %v", userID, err)
-		}
+	// Batch delete users
+	batch = &pgx.Batch{}
+	for _, userID := range deleteIDs {
+		batch.Queue("DELETE FROM users WHERE id = $1", userID)
+	}
 
-		if (i+1)%100 == 0 {
-			fmt.Printf("Deleted %d users...\n", i+1)
+	batchResults = conn.SendBatch(ctx, batch)
+	for i := 0; i < len(deleteIDs); i++ {
+		_, err := batchResults.Exec()
+		if err != nil {
+			log.Printf("Failed to execute batch delete: %v", err)
 		}
 	}
+	batchResults.Close()
 
 	deleteDuration := time.Since(deleteStart)
 	fmt.Printf("Deleted %d users in %v\n", len(deleteIDs), deleteDuration)

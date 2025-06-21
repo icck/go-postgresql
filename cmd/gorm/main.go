@@ -91,44 +91,37 @@ func main() {
 	fmt.Printf("\n=== Updating %d users ===\n", cfg.UpdateCount)
 	updateStart := time.Now()
 
-	// Get random users to update
-	var usersToUpdate []User
-	db.Limit(cfg.UpdateCount).Find(&usersToUpdate)
+	// Get IDs of users to update
+	var userIDs []uint
+	if err := db.Model(&User{}).Limit(cfg.UpdateCount).Pluck("id", &userIDs).Error; err != nil {
+		log.Fatalf("Failed to get user IDs for update: %v", err)
+	}
 
-	for i, user := range usersToUpdate {
-		newName := fmt.Sprintf("Updated_User_%06d", user.ID)
-		if err := db.Model(&user).Update("Name", newName).Error; err != nil {
-			log.Printf("Failed to update user ID %d: %v", user.ID, err)
-		}
-
-		if (i+1)%100 == 0 {
-			fmt.Printf("Updated %d users...\n", i+1)
-		}
+	// Bulk update using a single statement
+	if err := db.Model(&User{}).Where("id IN ?", userIDs).Update("name", "Updated_User_Bulk").Error; err != nil {
+		log.Fatalf("Failed to bulk update users: %v", err)
 	}
 
 	updateDuration := time.Since(updateStart)
-	fmt.Printf("Updated %d users in %v\n", len(usersToUpdate), updateDuration)
+	fmt.Printf("Updated %d users in %v\n", len(userIDs), updateDuration)
 
 	// --- Delete: Remove multiple users ---
 	fmt.Printf("\n=== Deleting %d users ===\n", cfg.DeleteCount)
 	deleteStart := time.Now()
 
-	// Get random users to delete
-	var usersToDelete []User
-	db.Offset(1000).Limit(cfg.DeleteCount).Find(&usersToDelete)
+	// Get IDs of users to delete
+	var userIDsToDelete []uint
+	if err := db.Model(&User{}).Offset(1000).Limit(cfg.DeleteCount).Pluck("id", &userIDsToDelete).Error; err != nil {
+		log.Fatalf("Failed to get user IDs for delete: %v", err)
+	}
 
-	for i, user := range usersToDelete {
-		if err := db.Delete(&user).Error; err != nil {
-			log.Printf("Failed to delete user ID %d: %v", user.ID, err)
-		}
-
-		if (i+1)%100 == 0 {
-			fmt.Printf("Deleted %d users...\n", i+1)
-		}
+	// Bulk delete using a single statement
+	if err := db.Delete(&User{}, userIDsToDelete).Error; err != nil {
+		log.Fatalf("Failed to bulk delete users: %v", err)
 	}
 
 	deleteDuration := time.Since(deleteStart)
-	fmt.Printf("Deleted %d users in %v\n", len(usersToDelete), deleteDuration)
+	fmt.Printf("Deleted %d users in %v\n", len(userIDsToDelete), deleteDuration)
 
 	// --- Create: Add new users ---
 	fmt.Printf("\n=== Creating %d new users ===\n", cfg.NewUsersCount)
