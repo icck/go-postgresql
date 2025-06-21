@@ -1,6 +1,20 @@
-# Go PostgreSQL サンプル
+# Go PostgreSQL ベンチマーク
 
 このリポジトリは、PostgreSQLを実行するための`docker-compose.yml`を提供し、GORM、PGX、PQのパフォーマンス比較を含んでいます。
+
+## プロジェクト構造
+
+```
+go-postgresql/
+├── config/
+│   └── env.go          # 設定管理（全ベンチマーク共通）
+├── cmd/
+│   ├── gorm/main.go    # GORM実装
+│   ├── pgx/main.go     # PGX実装
+│   └── pq/main.go      # PQ実装
+├── docker-compose.yml  # PostgreSQLコンテナ設定
+└── benchmark.sh        # 自動ベンチマークスクリプト
+```
 
 ## クイックスタート
 
@@ -86,14 +100,19 @@ go run main.go
 
 ### 設定
 
-データ量は各main.goの定数を変更することで調整できます：
+データ量は`config/env.go`で一元管理されており、以下の値を変更することで調整できます：
 
 ```go
-const (
-    INITIAL_USERS_COUNT = 50000  // 初期データ数
-    BATCH_SIZE         = 5000    // バッチサイズ
-    UPDATE_COUNT       = 5000    // 更新対象数
-    DELETE_COUNT       = 2500    // 削除対象数
-    NEW_USERS_COUNT    = 10000   // 新規作成数
-)
+// config/env.go
+func DefaultConfig() *DatabaseConfig {
+    return &DatabaseConfig{
+        InitialUsersCount: 50000, // 初期データ数
+        BatchSize:         5000,  // バッチサイズ
+        UpdateCount:       5000,  // 更新対象数
+        DeleteCount:       2500,  // 削除対象数
+        NewUsersCount:     10000, // 新規作成数
+    }
+}
 ```
+
+この設定は全てのベンチマーク（GORM、PGX、PQ）で共通して使用されるため、一箇所の変更で全ての実装に反映されます。将来的には環境変数や設定ファイルからの読み込みも可能な拡張性のある設計になっています。

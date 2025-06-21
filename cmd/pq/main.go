@@ -6,6 +6,8 @@ import (
 	"log"
 	"time"
 
+	"go-postgresql/config"
+
 	_ "github.com/lib/pq"
 )
 
@@ -18,16 +20,11 @@ type User struct {
 	CreatedAt time.Time
 }
 
-const (
-	INITIAL_USERS_COUNT = 50000 // 初期データ数
-	BATCH_SIZE          = 5000  // バッチサイズ
-	UPDATE_COUNT        = 5000  // 更新対象数
-	DELETE_COUNT        = 2500  // 削除対象数
-	NEW_USERS_COUNT     = 10000 // 新規作成数
-)
-
 func main() {
 	log.Println("go-postgresql (PQ version) starting up - Performance Test Mode")
+
+	// Load configuration
+	cfg := config.GetConfig()
 
 	totalStart := time.Now()
 
@@ -55,13 +52,13 @@ func main() {
 	fmt.Printf("Table 'users' cleared in %v\n", resetDuration)
 
 	// --- Seed large amount of initial data ---
-	fmt.Printf("\n=== Seeding %d initial users ===\n", INITIAL_USERS_COUNT)
+	fmt.Printf("\n=== Seeding %d initial users ===\n", cfg.InitialUsersCount)
 	seedStart := time.Now()
-	for i := 0; i < INITIAL_USERS_COUNT; i += BATCH_SIZE {
+	for i := 0; i < cfg.InitialUsersCount; i += cfg.BatchSize {
 		batchStart := time.Now()
-		end := i + BATCH_SIZE
-		if end > INITIAL_USERS_COUNT {
-			end = INITIAL_USERS_COUNT
+		end := i + cfg.BatchSize
+		if end > cfg.InitialUsersCount {
+			end = cfg.InitialUsersCount
 		}
 
 		tx, err := db.Begin()
@@ -103,10 +100,10 @@ func main() {
 	fmt.Printf("Found %d users in %v\n", userCount, readDuration)
 
 	// --- Update: Change multiple users' names ---
-	fmt.Printf("\n=== Updating %d users ===\n", UPDATE_COUNT)
+	fmt.Printf("\n=== Updating %d users ===\n", cfg.UpdateCount)
 	updateStart := time.Now()
 
-	rows, err := db.Query("SELECT id FROM users LIMIT $1", UPDATE_COUNT)
+	rows, err := db.Query("SELECT id FROM users LIMIT $1", cfg.UpdateCount)
 	if err != nil {
 		log.Fatalf("Failed to get users for update: %v", err)
 	}
@@ -133,9 +130,9 @@ func main() {
 	fmt.Printf("Updated %d users in %v\n", len(ids), updateDuration)
 
 	// --- Delete: Remove multiple users ---
-	fmt.Printf("\n=== Deleting %d users ===\n", DELETE_COUNT)
+	fmt.Printf("\n=== Deleting %d users ===\n", cfg.DeleteCount)
 	deleteStart := time.Now()
-	rows, err = db.Query("SELECT id FROM users OFFSET 1000 LIMIT $1", DELETE_COUNT)
+	rows, err = db.Query("SELECT id FROM users OFFSET 1000 LIMIT $1", cfg.DeleteCount)
 	if err != nil {
 		log.Fatalf("Failed to get users for deletion: %v", err)
 	}
@@ -162,13 +159,13 @@ func main() {
 	fmt.Printf("Deleted %d users in %v\n", len(deleteIDs), deleteDuration)
 
 	// --- Create: Add new users ---
-	fmt.Printf("\n=== Creating %d new users ===\n", NEW_USERS_COUNT)
+	fmt.Printf("\n=== Creating %d new users ===\n", cfg.NewUsersCount)
 	createStart := time.Now()
-	for i := 0; i < NEW_USERS_COUNT; i += BATCH_SIZE {
+	for i := 0; i < cfg.NewUsersCount; i += cfg.BatchSize {
 		batchStart := time.Now()
-		end := i + BATCH_SIZE
-		if end > NEW_USERS_COUNT {
-			end = NEW_USERS_COUNT
+		end := i + cfg.BatchSize
+		if end > cfg.NewUsersCount {
+			end = cfg.NewUsersCount
 		}
 
 		tx, err := db.Begin()
@@ -197,7 +194,7 @@ func main() {
 		fmt.Printf("New batch %d-%d created in %v\n", i+1, end, batchDuration)
 	}
 	createDuration := time.Since(createStart)
-	fmt.Printf("Created %d new users in %v\n", NEW_USERS_COUNT, createDuration)
+	fmt.Printf("Created %d new users in %v\n", cfg.NewUsersCount, createDuration)
 
 	// --- Final Read: Get final user count ---
 	fmt.Println("\n=== Final user count ===")
@@ -214,11 +211,11 @@ func main() {
 	fmt.Println("PQ PERFORMANCE SUMMARY")
 	fmt.Println("==================================================")
 	fmt.Printf("Reset:          %v\n", resetDuration)
-	fmt.Printf("Seed (%d):      %v\n", INITIAL_USERS_COUNT, seedDuration)
+	fmt.Printf("Seed (%d):      %v\n", cfg.InitialUsersCount, seedDuration)
 	fmt.Printf("Read Count:     %v\n", readDuration)
-	fmt.Printf("Update (%d):    %v\n", UPDATE_COUNT, updateDuration)
-	fmt.Printf("Delete (%d):    %v\n", DELETE_COUNT, deleteDuration)
-	fmt.Printf("Create (%d):    %v\n", NEW_USERS_COUNT, createDuration)
+	fmt.Printf("Update (%d):    %v\n", cfg.UpdateCount, updateDuration)
+	fmt.Printf("Delete (%d):    %v\n", cfg.DeleteCount, deleteDuration)
+	fmt.Printf("Create (%d):    %v\n", cfg.NewUsersCount, createDuration)
 	fmt.Printf("Final Read:     %v\n", finalReadDuration)
 	fmt.Println("--------------------------------------------------")
 	fmt.Printf("TOTAL TIME:     %v\n", totalDuration)
